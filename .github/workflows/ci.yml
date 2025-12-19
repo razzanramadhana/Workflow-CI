@@ -30,7 +30,7 @@ jobs:
         working-directory: MLProject
         run: |
           mlflow run . --env-manager=local -e main \
-            -P data_path="namadataset_preprocessing/loan_processed.csv" \
+            -P data_path="loan-dataset_preprocessing/loan_processed.csv" \
             -P experiment_name="CI_Retrain_Loan" \
             -P output_dir="outputs"
 
