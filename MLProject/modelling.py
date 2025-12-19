@@ -44,7 +44,6 @@ def main():
     ensure_dir(args.output_dir)
 
     # Local tracking (CI nanti cukup upload folder mlruns/ atau outputs/)
-    mlflow.set_tracking_uri("file:./mlruns")
     mlflow.set_experiment(args.experiment_name)
 
     df = pd.read_csv(args.data_path)
