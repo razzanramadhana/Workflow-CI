@@ -1,0 +1,15 @@
+name: workflow-ci-loan
+
+conda_env: conda.yaml
+
+entry_points:
+  main:
+    parameters:
+      data_path: {type: str, default: "loan-dataset_preprocessing/loan_processed.csv"}
+      experiment_name: {type: str, default: "CI_Retrain_Loan"}
+      output_dir: {type: str, default: "outputs"}
+    command: >
+      python modelling.py
+      --data_path {data_path}
+      --experiment_name "{experiment_name}"
+      --output_dir "{output_dir}"
