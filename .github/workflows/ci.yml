@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -21,45 +21,31 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install MLflow + deps
+      - name: Install MLflow & dependencies
         run: |
           python -m pip install --upgrade pip
           pip install mlflow pandas numpy scikit-learn matplotlib joblib
 
+      # 🔁 Retraining via MLflow Project
       - name: Run MLflow Project (retrain)
         working-directory: MLProject
         run: |
-          mlflow run . --env-manager=local -e main \
+          mlflow run . --env-manager=local --no-conda -e main \
             -P data_path="loan-dataset_preprocessing/loan_processed.csv" \
             -P experiment_name="CI_Retrain_Loan" \
             -P output_dir="outputs"
 
-      # ✅ Skilled: simpan artifacts ke repository (commit + push)
-      - name: Commit artifacts to repo
+      # 💾 Skilled: simpan artefak ke repository
+      - name: Commit training artifacts
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
 
           mkdir -p artifacts/latest
-
-          # salin output training terbaru (abaikan kalau kosong)
           cp -r MLProject/outputs/* artifacts/latest/ 2>/dev/null || true
 
-          # (opsional) simpan juga tracking folder mlruns
-          mkdir -p artifacts/mlruns
-          cp -r MLProject/mlruns artifacts/mlruns/ 2>/dev/null || true
-
-          git add artifacts/latest artifacts/mlruns
-          git commit -m "CI: update retrain artifacts" || echo "No changes to commit"
+          git add artifacts/latest
+          git commit -m "CI: update retrain artifacts" || echo "No changes"
           git push
 
-      # (opsional) tetap upload ke GitHub Actions artifact juga
-      - name: Upload outputs artifact (Skilled minimal)
-        uses: actions/upload-artifact@v4
-        with:
-          name: retrain-outputs
-          path: |
-            MLProject/outputs
-            MLProject/mlruns
-            artifacts/latest
-            artifacts/mlruns
+      # 📦 (opsional) Upload ju

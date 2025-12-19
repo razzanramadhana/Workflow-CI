@@ -1,4 +1,4 @@
-name: ci-mlflow-env
+name: workflow-ci-env
 channels:
   - conda-forge
 dependencies:
