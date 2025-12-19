@@ -43,12 +43,17 @@ def main():
 
     ensure_dir(args.output_dir)
 
-    # Local tracking (CI nanti cukup upload folder mlruns/ atau outputs/)
-    mlflow.set_experiment(args.experiment_name)
+    # ✅ Deteksi apakah script dijalankan lewat `mlflow run` (MLflow Project)
+    is_project = os.getenv("MLFLOW_RUN_ID") is not None
+
+    # ✅ Kalau dijalankan manual (python modelling.py), baru set experiment sendiri.
+    # ✅ Kalau lewat MLflow Project, JANGAN set experiment supaya tidak konflik.
+    if not is_project:
+        mlflow.set_experiment(args.experiment_name)
 
     df = pd.read_csv(args.data_path)
 
-    # target encoding
+    # target encoding (❗tidak diubah sesuai permintaan)
     y = df["Loan_Status"]
     X = df.drop(columns=["Loan_Status"])
 
@@ -61,7 +66,8 @@ def main():
         ("clf", LogisticRegression(max_iter=3000))
     ])
 
-    with mlflow.start_run(run_name="CI_Retrain_Run") as run:
+    # ✅ Jika dipanggil via MLflow Project: buat nested run untuk menghindari konflik run/experiment
+    with mlflow.start_run(run_name="CI_Retrain_Run", nested=is_project) as run:
         pipe.fit(X_train, y_train)
 
         y_pred = pipe.predict(X_test)
@@ -101,7 +107,11 @@ def main():
 
         metrics_path = os.path.join(args.output_dir, "metrics.json")
         with open(metrics_path, "w") as f:
-            json.dump({"acc": acc, "precision": prec, "recall": rec, "f1": f1, "auc": auc, "log_loss": ll}, f, indent=2)
+            json.dump(
+                {"acc": acc, "precision": prec, "recall": rec, "f1": f1, "auc": auc, "log_loss": ll},
+                f,
+                indent=2
+            )
         mlflow.log_artifact(metrics_path, artifact_path="reports")
 
         # simpan run_id agar workflow bisa build-docker dari run ini
@@ -110,15 +120,9 @@ def main():
             f.write(run.info.run_id)
         mlflow.log_artifact(run_id_path, artifact_path="meta")
 
-        # simpan model lokal juga (opsional)
-        local_model_path = os.path.join(args.output_dir, "model.joblib")
-        joblib.dump(pipe, local_model_path)
-
         print("✅ CI retrain finished")
         print("Run ID:", run.info.run_id)
         print(f"Accuracy={acc:.4f} | F1={f1:.4f} | AUC={auc:.4f}")
 
 if __name__ == "__main__":
     main()
-
-#testing actions again
