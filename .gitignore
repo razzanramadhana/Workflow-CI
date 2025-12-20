@@ -1,2 +1,6 @@
 MLProject/mlruns/
-artifacts/
+# ignore semua artifacts...
+artifacts/*
+# ...tapi izinkan folder latest (yang mau kamu commit)
+!artifacts/latest/
+!artifacts/latest/**
