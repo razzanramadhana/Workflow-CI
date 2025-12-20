@@ -43,7 +43,6 @@ def main():
 
     ensure_dir(args.output_dir)
 
-    # Deteksi MLflow Project
     is_project = os.getenv("MLFLOW_RUN_ID") is not None
     if not is_project:
         mlflow.set_experiment(args.experiment_name)
@@ -52,6 +51,17 @@ def main():
 
     # target (TIDAK diubah)
     y = df["Loan_Status"]
+
+    # ✅ pastikan target 0/1 (kalau string "Y"/"N" atau variasi)
+    if y.dtype == "object":
+        y = y.astype(str).str.strip().str.upper().map({"Y": 1, "N": 0, "1": 1, "0": 0})
+    y = pd.to_numeric(y, errors="coerce")
+
+    # ✅ drop NaN target biar stratify aman
+    keep = y.notna()
+    df = df.loc[keep].copy()
+    y = y.loc[keep].astype(int)
+
     X = df.drop(columns=["Loan_Status"])
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -82,7 +92,6 @@ def main():
             "test_size": 0.2,
             "random_state": 42
         })
-
         mlflow.log_metrics({
             "test_accuracy": acc,
             "test_precision": prec,
@@ -92,43 +101,31 @@ def main():
             "test_log_loss": ll
         })
 
-        # ====== LOG MODEL KE MLFLOW ======
+        # ✅ log model ke MLflow
         mlflow.sklearn.log_model(pipe, artifact_path="model")
 
-        # ====== SIMPAN MODEL LOKAL (PENTING UNTUK KRITERIA 4) ======
+        # ✅ simpan model file untuk kriteria 4 (inference.py ambil dari sini)
         local_model_path = os.path.join(args.output_dir, "model.joblib")
         joblib.dump(pipe, local_model_path)
 
-        # ====== ARTIFACT TAMBAHAN ======
+        # artifacts tambahan
         cm = confusion_matrix(y_test, y_pred)
         cm_path = os.path.join(args.output_dir, "confusion_matrix.png")
         plot_confusion_matrix(cm, cm_path)
-        mlflow.log_artifact(cm_path, artifact_path="plots")
 
         metrics_path = os.path.join(args.output_dir, "metrics.json")
         with open(metrics_path, "w") as f:
             json.dump(
-                {
-                    "accuracy": acc,
-                    "precision": prec,
-                    "recall": rec,
-                    "f1": f1,
-                    "auc": auc,
-                    "log_loss": ll
-                },
-                f,
-                indent=2
+                {"accuracy": acc, "precision": prec, "recall": rec, "f1": f1, "auc": auc, "log_loss": ll},
+                f, indent=2
             )
-        mlflow.log_artifact(metrics_path, artifact_path="reports")
 
         run_id_path = os.path.join(args.output_dir, "run_id.txt")
         with open(run_id_path, "w") as f:
             f.write(run.info.run_id)
-        mlflow.log_artifact(run_id_path, artifact_path="meta")
 
         print("✅ CI retrain finished")
         print("Run ID:", run.info.run_id)
-        print(f"Accuracy={acc:.4f} | F1={f1:.4f} | AUC={auc:.4f}")
 
 if __name__ == "__main__":
     main()

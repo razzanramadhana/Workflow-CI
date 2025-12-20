@@ -6,6 +6,10 @@ on:
       - "MLProject/**"
   workflow_dispatch:
 
+# ✅ biar bisa git push dari workflow (Skilled)
+permissions:
+  contents: write
+
 jobs:
   retrain:
     runs-on: ubuntu-latest
@@ -15,6 +19,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -26,26 +31,39 @@ jobs:
           python -m pip install --upgrade pip
           pip install mlflow pandas numpy scikit-learn matplotlib joblib
 
+      # ✅ pastikan tracking store fresh (ga pakai meta.yaml /Users dari repo)
+      - name: Clean old tracking folder (safety)
+        run: |
+          rm -rf MLProject/mlruns
+          rm -rf MLProject/outputs
+
       # 🔁 Retraining via MLflow Project
       - name: Run MLflow Project (retrain)
         working-directory: MLProject
+        env:
+          # ✅ paksa tracking ke folder CI (relative di runner)
+          MLFLOW_TRACKING_URI: file:./mlruns
+          MLFLOW_REGISTRY_URI: file:./mlruns
         run: |
           mlflow run . --env-manager=local -e main \
+            --experiment-name "CI_Retrain_Loan" \
             -P data_path="loan-dataset_preprocessing/loan_processed.csv" \
-            -P experiment_name="CI_Retrain_Loan" \
             -P output_dir="outputs"
 
-      # 💾 Skilled: simpan artefak ke repository
+      # 💾 Skilled: simpan artefak ke repository (bukan cuma upload-artifact)
       - name: Commit training artifacts
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
 
           mkdir -p artifacts/latest
+
+          # ambil hasil run (model.joblib, metrics, confusion matrix, run_id, dll)
           cp -r MLProject/outputs/* artifacts/latest/ 2>/dev/null || true
 
-          git add artifacts/latest
-          git commit -m "CI: update retrain artifacts" || echo "No changes"
-          git push
+          # opsional: simpan tracking folder juga (kalau mau ada bukti mlruns di repo)
+          # cp -r MLProject/mlruns artifacts/latest/mlruns 2>/dev/null || true
 
-      # 📦 (opsional) Upload ju
+          git add artifacts/latest
+          git commit -m "CI: update retrain artifacts" || echo "No changes to commit"
+          git push
