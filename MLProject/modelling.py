@@ -43,17 +43,14 @@ def main():
 
     ensure_dir(args.output_dir)
 
-    # ✅ Deteksi apakah script dijalankan lewat `mlflow run` (MLflow Project)
+    # Deteksi MLflow Project
     is_project = os.getenv("MLFLOW_RUN_ID") is not None
-
-    # ✅ Kalau dijalankan manual (python modelling.py), baru set experiment sendiri.
-    # ✅ Kalau lewat MLflow Project, JANGAN set experiment supaya tidak konflik.
     if not is_project:
         mlflow.set_experiment(args.experiment_name)
 
     df = pd.read_csv(args.data_path)
 
-    # target encoding (❗tidak diubah sesuai permintaan)
+    # target (TIDAK diubah)
     y = df["Loan_Status"]
     X = df.drop(columns=["Loan_Status"])
 
@@ -66,7 +63,6 @@ def main():
         ("clf", LogisticRegression(max_iter=3000))
     ])
 
-    # ✅ Jika dipanggil via MLflow Project: buat nested run untuk menghindari konflik run/experiment
     with mlflow.start_run(run_name="CI_Retrain_Run", nested=is_project) as run:
         pipe.fit(X_train, y_train)
 
@@ -96,10 +92,14 @@ def main():
             "test_log_loss": ll
         })
 
-        # log model (dipakai untuk build-docker nanti)
+        # ====== LOG MODEL KE MLFLOW ======
         mlflow.sklearn.log_model(pipe, artifact_path="model")
 
-        # ====== artifacts tambahan (untuk Skilled/Advance CI) ======
+        # ====== SIMPAN MODEL LOKAL (PENTING UNTUK KRITERIA 4) ======
+        local_model_path = os.path.join(args.output_dir, "model.joblib")
+        joblib.dump(pipe, local_model_path)
+
+        # ====== ARTIFACT TAMBAHAN ======
         cm = confusion_matrix(y_test, y_pred)
         cm_path = os.path.join(args.output_dir, "confusion_matrix.png")
         plot_confusion_matrix(cm, cm_path)
@@ -108,13 +108,19 @@ def main():
         metrics_path = os.path.join(args.output_dir, "metrics.json")
         with open(metrics_path, "w") as f:
             json.dump(
-                {"acc": acc, "precision": prec, "recall": rec, "f1": f1, "auc": auc, "log_loss": ll},
+                {
+                    "accuracy": acc,
+                    "precision": prec,
+                    "recall": rec,
+                    "f1": f1,
+                    "auc": auc,
+                    "log_loss": ll
+                },
                 f,
                 indent=2
             )
         mlflow.log_artifact(metrics_path, artifact_path="reports")
 
-        # simpan run_id agar workflow bisa build-docker dari run ini
         run_id_path = os.path.join(args.output_dir, "run_id.txt")
         with open(run_id_path, "w") as f:
             f.write(run.info.run_id)
